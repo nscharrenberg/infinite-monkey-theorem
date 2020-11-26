@@ -1,151 +1,64 @@
 package nl.scharrenberg.imt.domain;
 
+import nl.scharrenberg.imt.utils.HeapSort;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Random;
 
 public class Population {
-    private final double MUTATION_RATE;
-    private final String TARGET_STRING;
-    private ArrayList<Dna> population;
-    private ArrayList<Dna> matingPool;
-    private boolean finished;
-    private double perfectScore;
+    private final static double CONVERGENCE_RATE = 1;
+    private double mutationRate;
+    private String targetPhrase;
+    private ArrayList<Individual> population;
+    private ArrayList<Individual> matingPool;
+    private boolean isDone;
     private int generation;
+    private char[] vocabulary = new char[27];
 
-    public Population() {
-        this.TARGET_STRING = "";
-        this.MUTATION_RATE = 0.0;
-        this.generation = 0;
-        this.perfectScore = 0.0;
-        this.finished = false;
-    }
-
-    public Population(String target, double mutationRate, int populationSize) {
-        this.MUTATION_RATE = mutationRate;
-        this.TARGET_STRING = target;
-
-        this.population = new ArrayList<>(populationSize);
+    // CONSTRUCTORS
+    public Population(String targetPhrase, double mutationRate, int populationSize) {
+        this.mutationRate = mutationRate;
+        this.targetPhrase = targetPhrase;
+        this.population = new ArrayList<>();
         this.matingPool = new ArrayList<>();
+        this.isDone = false;
+        this.generation = 0;
+
+        // Initialize available dictionary
+        initVocabulary();
 
         for (int i = 0; i < populationSize; i++) {
-            this.addDnaToPopulation(new Dna(TARGET_STRING.length()));
+            this.addIndividualToPopulation(new Individual(targetPhrase.length(), vocabulary));
         }
 
         this.calculateFitness();
-        this.finished = false;
-        this.perfectScore = 1;
     }
 
-    public void calculateFitness() {
-        for (Dna dna : this.getPopulation()) {
-            dna.fitness(TARGET_STRING);
-        }
+    // GETTERS & SETTERS
+
+    public ArrayList<Individual> getPopulation() {
+        return population;
     }
 
-    public void selection() {
-        this.matingPool.clear();
-
-        for (Dna dna : this.getPopulation()) {
-            int n = (int) dna.getFitness() * 100;
-
-            for (int i = 0; i < n; i++) {
-                this.addDnaToMatingPool(dna);
-            }
-        }
-
+    public void setPopulation(ArrayList<Individual> population) {
+        this.population = population;
     }
 
-    public void generate() {
-        for (int i = 0; i < this.getPopulation().size(); i++) {
-            Dna[] parents = randomChoices(this.getMatingPool(), 2);
-
-            Dna mother = parents[0];
-            Dna father = parents[1];
-
-            Dna child = father.crossover(mother);
-            child.mutate(MUTATION_RATE);
-            this.population.add(child);
-        }
-
-        generation++;
+    public ArrayList<Individual> getMatingPool() {
+        return matingPool;
     }
 
-    public String getBest() {
-        int record = 0;
-        int index = 0;
-        for (int i = 0; i < this.getPopulation().size(); i++) {
-            if (this.population.get(i).getFitness() > record) {
-                index = i;
-            }
-        }
-
-        if (record == perfectScore) {
-            this.finished = true;
-        }
-
-        return this.population.get(index).getPhrase();
+    public void setMatingPool(ArrayList<Individual> matingPool) {
+        this.matingPool = matingPool;
     }
 
-    public void addDnaToPopulation(Dna dna) {
-        this.population.add(dna);
+    public boolean isDone() {
+        return isDone;
     }
 
-    public ArrayList<Dna> getPopulation() {
-        return this.population;
-    }
-
-    public void addDnaToMatingPool(Dna dna) {
-        this.matingPool.add(dna);
-    }
-
-    public ArrayList<Dna> getMatingPool() {
-        return this.matingPool;
-    }
-
-//    private Dna randomChoices(ArrayList<Dna> items) {
-//        double newWeight = 0.00;
-//        double weight = items.size() / 100.00;
-//        for (Dna item : items) {
-//            newWeight += weight;
-//        }
-//
-//        double r = Math.random() * newWeight;
-//        double countWeight = 0.00;
-//
-//        for (Dna item : items) {
-//            countWeight += weight;
-//
-//            System.out.println(String.format("%s; %s; %s", countWeight, weight, r));
-//
-//            if (countWeight >= r) {
-//                return item;
-//            }
-//        }
-//
-//        return null;
-//    }
-
-    private Dna[] randomChoices(ArrayList<Dna> items, int k) {
-        int n = items.size();
-
-        n += 0.0;
-
-        Dna[] chosen = new Dna[k];
-
-        for (int i = 0; i < k; i++) {
-            chosen[i] = items.get((int) Math.floor(Math.random() * n));
-        }
-
-        return chosen;
-    }
-
-    public boolean isFinished() {
-        return finished;
-    }
-
-    public void setFinished(boolean finished) {
-        this.finished = finished;
+    public void setDone(boolean done) {
+        isDone = done;
     }
 
     public int getGeneration() {
@@ -154,5 +67,89 @@ public class Population {
 
     public void setGeneration(int generation) {
         this.generation = generation;
+    }
+
+    // LOGIC METHODS
+
+    public void addIndividualToPopulation(Individual individual) {
+        this.population.add(individual);
+    }
+
+    public void addIndividualToMatingPool(Individual individual) {
+        this.matingPool.add(individual);
+    }
+
+    private void initVocabulary() {
+        for (char i = 'A'; i <= 'Z'; i++) {
+            vocabulary[i - 'A'] = i;
+        }
+
+        // Also allow spaces
+        vocabulary[26] = ' ';
+    }
+
+    public Individual getBest() {
+        Individual[] sorted = HeapSort.sort(this.population.toArray(new Individual[0]));
+        this.setPopulation(new ArrayList<Individual>(Arrays.asList(sorted)));
+
+        if (sorted[0].getFitness() > CONVERGENCE_RATE) {
+            this.setDone(true);
+        }
+
+        return sorted[0];
+    }
+
+    public void calculateFitness() {
+        for (Individual individual : this.population) {
+            individual.calculateFitness(targetPhrase);
+        }
+    }
+
+    public void selection() {
+        this.matingPool.clear();
+
+        for (Individual individual : this.population) {
+            double n = individual.getFitness();
+
+            for (int i = 0; i < n; i++) {
+                this.addIndividualToMatingPool(individual);
+            }
+        }
+    }
+
+    public void generate() {
+        ArrayList<Individual> nextGeneration = new ArrayList<>();
+
+        for (int i = 0; i < this.population.size(); i++) {
+            Individual[] parents = randomChoices(this.getMatingPool(), 2);
+
+            Individual mother = parents[0];
+            Individual father = parents[1];
+
+            Individual[] children = mother.crossover(father);
+            Individual brother = children[0];
+            Individual sister = children[1];
+
+            brother.mutate(mutationRate, vocabulary);
+            sister.mutate(mutationRate, vocabulary);
+
+            nextGeneration.add(brother);
+            nextGeneration.add(sister);
+        }
+
+        this.population = nextGeneration;
+        generation++;
+    }
+
+    private Individual[] randomChoices(ArrayList<Individual> individuals, int k) {
+        int n = individuals.size();
+
+        Individual[] chosen = new Individual[k];
+
+        for (int i = 0; i < k; i++) {
+            chosen[i] = individuals.get(new Random().nextInt(n));
+        }
+
+        return chosen;
     }
 }
