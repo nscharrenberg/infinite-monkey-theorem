@@ -26,7 +26,7 @@ public class HeapSort {
         return i;
     }
 
-    private static void downheap(Individual[] i, int k, int N)
+    private static void downheap(Individual i[], int k, int N)
     {
         Individual T = i[k - 1];
 

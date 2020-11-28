@@ -3,54 +3,102 @@ package nl.scharrenberg.imt.domain;
 import nl.scharrenberg.imt.utils.HeapSort;
 
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Random;
 
 public class Population {
-    private final static double CONVERGENCE_RATE = 1;
-    private double mutationRate;
-    private String targetPhrase;
-    private ArrayList<Individual> population;
-    private ArrayList<Individual> matingPool;
-    private boolean isDone;
-    private int generation;
-    private char[] vocabulary = new char[27];
+    public static char[] VOCABULARY = new char[56];
+    public static String TARGET_PHRASE = "Hello world?";
+    public static int POPULATION_SIZE = 1000;
+    public static double MUTATION_RATE = .01;
 
-    // CONSTRUCTORS
-    public Population(String targetPhrase, double mutationRate, int populationSize) {
-        this.mutationRate = mutationRate;
-        this.targetPhrase = targetPhrase;
-        this.population = new ArrayList<>();
-        this.matingPool = new ArrayList<>();
-        this.isDone = false;
-        this.generation = 0;
+    private boolean isDone = false;
+    private int generation = 0;
+    private ArrayList<Individual> population = new ArrayList<>();
+    private ArrayList<Individual> matingPool = new ArrayList<>();
 
-        // Initialize available dictionary
-        initVocabulary();
+    public Population() {
+        getVocabulary();
 
-        for (int i = 0; i < populationSize; i++) {
-            this.addIndividualToPopulation(new Individual(targetPhrase.length(), vocabulary));
+        for (int i = 0; i < POPULATION_SIZE; i++) {
+            this.population.add(new Individual());
         }
 
         this.calculateFitness();
     }
 
-    // GETTERS & SETTERS
-
-    public ArrayList<Individual> getPopulation() {
-        return population;
+    public void calculateFitness() {
+        for (Individual individual : this.population) {
+            individual.calculateFitness(TARGET_PHRASE);
+        }
     }
 
-    public void setPopulation(ArrayList<Individual> population) {
-        this.population = population;
+    public void select() {
+        this.matingPool.clear();
+
+        for (Individual individual : this.population) {
+            double n = individual.getFitness() * 100;
+
+            for (int i = 0; i < n; i++) {
+                this.matingPool.add(individual);
+            }
+        }
     }
 
-    public ArrayList<Individual> getMatingPool() {
-        return matingPool;
+    public void generate() {
+        ArrayList<Individual> newPopulation = new ArrayList<>();
+
+        for (int i = 0; i < this.population.size(); i++) {
+            Individual mother = this.matingPool.get((int) (Math.random() * this.matingPool.size()));
+            Individual father = this.matingPool.get((int) (Math.random() * this.matingPool.size()));
+
+            Individual child = mother.crossover(father);
+            child.mutate(MUTATION_RATE);
+            newPopulation.add(child);
+        }
+
+        this.population = newPopulation;
+        this.matingPool = new ArrayList<>();
+        this.generation++;
     }
 
-    public void setMatingPool(ArrayList<Individual> matingPool) {
-        this.matingPool = matingPool;
+    public String getBest() {
+        Individual[] sorted = HeapSort.sort(this.population.toArray(new Individual[0]));
+        Individual best = sorted[0];
+
+        if (best.getFitness() >= 1) {
+            this.isDone = true;
+        }
+
+        return sorted[0].genoToPhenotype();
+    }
+
+    private void getVocabulary() {
+        int count = 0;
+
+        // A to Z
+        for (char c = 'A'; c <= 'Z'; c++) {
+            VOCABULARY[c - 'A'] = c;
+            count++;
+        }
+
+        int firstLowerCaseCount = count;
+
+        for (char c = 'a'; c <= 'z'; c++) {
+            VOCABULARY[c + firstLowerCaseCount - 'a'] = c;
+            count++;
+        }
+
+        // Add spaces to vocabulary
+        VOCABULARY[count] = ' ';
+        count++;
+
+        VOCABULARY[count] = '.';
+        count++;
+
+        VOCABULARY[count] = '?';
+        count++;
+
+        VOCABULARY[count] = '!';
+        count++;
     }
 
     public boolean isDone() {
@@ -67,89 +115,5 @@ public class Population {
 
     public void setGeneration(int generation) {
         this.generation = generation;
-    }
-
-    // LOGIC METHODS
-
-    public void addIndividualToPopulation(Individual individual) {
-        this.population.add(individual);
-    }
-
-    public void addIndividualToMatingPool(Individual individual) {
-        this.matingPool.add(individual);
-    }
-
-    private void initVocabulary() {
-        for (char i = 'A'; i <= 'Z'; i++) {
-            vocabulary[i - 'A'] = i;
-        }
-
-        // Also allow spaces
-        vocabulary[26] = ' ';
-    }
-
-    public Individual getBest() {
-        Individual[] sorted = HeapSort.sort(this.population.toArray(new Individual[0]));
-        this.setPopulation(new ArrayList<Individual>(Arrays.asList(sorted)));
-
-        if (sorted[0].getFitness() > CONVERGENCE_RATE) {
-            this.setDone(true);
-        }
-
-        return sorted[0];
-    }
-
-    public void calculateFitness() {
-        for (Individual individual : this.population) {
-            individual.calculateFitness(targetPhrase);
-        }
-    }
-
-    public void selection() {
-        this.matingPool.clear();
-
-        for (Individual individual : this.population) {
-            double n = individual.getFitness();
-
-            for (int i = 0; i < n; i++) {
-                this.addIndividualToMatingPool(individual);
-            }
-        }
-    }
-
-    public void generate() {
-        ArrayList<Individual> nextGeneration = new ArrayList<>();
-
-        for (int i = 0; i < this.population.size(); i++) {
-            Individual[] parents = randomChoices(this.getMatingPool(), 2);
-
-            Individual mother = parents[0];
-            Individual father = parents[1];
-
-            Individual[] children = mother.crossover(father);
-            Individual brother = children[0];
-            Individual sister = children[1];
-
-            brother.mutate(mutationRate, vocabulary);
-            sister.mutate(mutationRate, vocabulary);
-
-            nextGeneration.add(brother);
-            nextGeneration.add(sister);
-        }
-
-        this.population = nextGeneration;
-        generation++;
-    }
-
-    private Individual[] randomChoices(ArrayList<Individual> individuals, int k) {
-        int n = individuals.size();
-
-        Individual[] chosen = new Individual[k];
-
-        for (int i = 0; i < k; i++) {
-            chosen[i] = individuals.get(new Random().nextInt(n));
-        }
-
-        return chosen;
     }
 }
